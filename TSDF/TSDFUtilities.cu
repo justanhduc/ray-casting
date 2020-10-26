@@ -1,4 +1,4 @@
-#include "TSDF_utilities.hpp"
+#include "TSDFUtilities.hpp"
 
 /**
 * @param x The horizontal coord (0-width-1)

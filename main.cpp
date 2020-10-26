@@ -64,7 +64,8 @@ int main() {
 
     Vector3f light_source{0, 3, 3};
     auto eye = Vector3f{0.5, 0, 2};  // view point
-    Camera *cam = new Camera((float) width / 2, (float) height / 2, (float) (width - 1) / 2, (float) (height - 1) / 2);
+    Camera *cam = new Camera((float) width / 2, (float) height / 2, (float) (width - 1) / 2,
+                             (float) (height - 1) / 2);
     cam->move_to(eye);
     cam->look_at(0.5, 0.5, 0.5);
 

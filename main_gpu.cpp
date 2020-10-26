@@ -11,7 +11,7 @@
 
 #include "TSDFVolume.hpp"
 #include "GPURaycaster.hpp"
-#include "RenderUtilities.hpp"
+#include "RenderUtilitiesGPU.hpp"
 #include "opencv2/opencv.hpp"
 
 #define MAX_PATH 260  // for linux
@@ -21,7 +21,7 @@ int main() {
     using namespace Eigen;
 
     const int dim_x = 101, dim_y = 139, dim_z = 106;
-    const int n_max_frame = 1;
+    const int n_max_frame = 30;
     const int width = 1024;
     const int height = 1024;
 
@@ -49,23 +49,30 @@ int main() {
             exit(-1);
         }
         fread(ftemp, sizeof(float), 8, fp);
-        fread(tsdf + (dim_x * dim_y * dim_z) * i, dim_x * dim_y * dim_z, sizeof(float), fp);
+        fread(tsdf, dim_x * dim_y * dim_z, sizeof(float), fp);
         fclose(fp);
 
         // set tsdf to volume
         volume.set_distance_data(tsdf);
 
         // define containers for normals and vertices
-        auto *vertices = new Eigen::Matrix<float, 3, Eigen::Dynamic>[width * height];
-        auto *normals = new Eigen::Matrix<float, 3, Eigen::Dynamic>[width * height];
+        Eigen::Matrix<float, 3, Eigen::Dynamic> vertices;
+        Eigen::Matrix<float, 3, Eigen::Dynamic> normals;
 
         // perform ray casting
-        r.raycast(volume, *cam, *vertices, *normals);
+//        r.raycast(volume, *cam, *vertices, *normals);
 //        r.render_to_depth_image(volume, *cam);
-        uint8_t * scene = render_scene(width, height, *vertices, *normals, *cam, light_source);
+        auto *scene = new uint8_t[height * width];
+        r.render_with_shading(volume, *cam, vertices, normals, light_source, scene);
+
+//        r.raycast(volume, *cam, vertices, normals);
+//        save_rendered_scene_as_png("vvv.png", width, height, vertices, normals, *cam, light_source);
+//        for (auto i = 0; i < width * height; i++)
+//            std::cout << normals[i] << std::endl;
 
         cv::Mat frame(height, width, 0, scene);
         cv::imshow("Frame", frame);
+//        cv::waitKey(0);
         auto c = (char) cv::waitKey(25);
         if (c == 27)
             break;

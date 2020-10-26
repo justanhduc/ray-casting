@@ -48,6 +48,10 @@ struct uchar3cpu {
     unsigned char x, y, z;
 };
 
+inline float f3_dot(const float3cpu& f1, const float3cpu& f2) {
+    return f1.x * f2.x + f1.y * f2.y + f1.z * f2.z;
+}
+
 /**
  * Subtract one float3 from another
  * @param f1 First float3

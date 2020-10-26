@@ -1,6 +1,7 @@
-#ifndef CU_COMMON_H
-#define CU_COMMON_H
+#ifndef CU_COMMON_CUH
+#define CU_COMMON_CUH
 
+#include <Eigen/Core>
 #include <string>
 #include "vector_types.h"
 #include "vector_functions.h"
@@ -25,6 +26,18 @@ typedef struct {
 
 void check_cuda_error( const std::string& message, const cudaError_t err );
 
+
+__host__ __forceinline__
+float3 float3_from_eigen_vector( const Eigen::Vector3f & vector ) {
+    float3 f { vector[0], vector[1], vector[2]};
+    return f;
+}
+
+
+__device__ __forceinline__
+float f3_dot(const float3& f1, const float3& f2) {
+    return f1.x * f2.x + f1.y * f2.y + f1.z * f2.z;
+}
 
 /**
  * Subtract one float3 from another
@@ -86,8 +99,8 @@ float3 f3_div_elem( const float3& f, const dim3& i ) {
  * @param vec The float3 vector
  */
 __device__ __forceinline__
-void f3_normalise( float3 vec ) {
-    float l = sqrt( vec.x*vec.x+vec.y*vec.y+vec.z*vec.z);
+void f3_normalise( float3 &vec ) {
+    float l = sqrt( vec.x*vec.x+vec.y*vec.y+vec.z*vec.z) + 1e-8;
     vec.x /= l;
     vec.y /= l;
     vec.z /= l;

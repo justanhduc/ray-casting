@@ -41,6 +41,11 @@ public:
      */
     DepthImage * render_to_depth_image( const TSDFVolume & volume, const Camera & camera ) const;
 
+    void render_with_shading(const TSDFVolume & volume, const Camera & camera,
+                             Eigen::Matrix<float, 3, Eigen::Dynamic> & vertices,
+                             Eigen::Matrix<float, 3, Eigen::Dynamic> & normals,
+                             const Eigen::Vector3f &light_source, uint8_t *image) const;
+
 protected:
 
     uint16_t    m_width;

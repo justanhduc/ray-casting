@@ -3,12 +3,12 @@
 
 #include "TSDFVolume.hpp"
 #include "GPURaycaster.hpp"
-#include "cuda_utilities.hpp"
-#include "TSDF_utilities.hpp"
+#include "cuda_utilities.cuh"
+#include "TSDFUtilities.hpp"
 #include "PngUtilities.hpp"
+#include "RenderUtilitiesGPU.hpp"
 
 #include <Eigen/Core>
-
 #include "math_constants.h"
 
 /**
@@ -377,12 +377,6 @@ void process_ray(   const float3        origin,
 }
 
 
-__host__
-float3 float3_from_eigen_vector( const Eigen::Vector3f & vector ) {
-    float3 f { vector[0], vector[1], vector[2]};
-    return f;
-}
-
 /**
  * Compute normals to the vertex data provided
  * @param width The with of the output matrix
@@ -604,4 +598,36 @@ DepthImage * GPURaycaster::render_to_depth_image( const TSDFVolume & volume, con
     cudaFree( d_vertices );
     std::cout << "  done" << std::endl;
     return d;
+}
+
+void GPURaycaster::render_with_shading(const TSDFVolume & volume, const Camera & camera,
+                                       Eigen::Matrix<float, 3, Eigen::Dynamic> & vertices,
+                                       Eigen::Matrix<float, 3, Eigen::Dynamic> & normals,
+                                       const Eigen::Vector3f &light_source, uint8_t *image) const {
+    using namespace Eigen;
+
+    // Compute vertices
+    float3 * d_vertices = get_vertices( volume, camera, m_width, m_height );
+
+    // Compute normals
+    float3 * d_normals = compute_normals( m_width, m_height, d_vertices );
+
+    // shading and render
+    render_scene(m_width, m_height, d_vertices, d_normals, light_source, image);
+
+    // Copy vertex data back
+    cudaError_t err;
+
+    vertices.resize( 3, m_width * m_height);
+    float *h_vertices = vertices.data();
+    err = cudaMemcpy( h_vertices, d_vertices, m_width * m_height * 3 * sizeof( float ), cudaMemcpyDeviceToHost);
+    check_cuda_error( "Vertices Memcpy failed ", err);
+    cudaFree( d_vertices );
+
+    // Copy normal data back
+    normals.resize( 3, m_width * m_height );
+    float *h_normals = normals.data();
+    err = cudaMemcpy( h_normals, d_normals, m_width * m_height * 3 * sizeof( float ), cudaMemcpyDeviceToHost);
+    check_cuda_error( "Normals Memcpy failed ", err);
+    cudaFree( d_normals );
 }

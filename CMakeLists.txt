@@ -44,3 +44,54 @@ target_link_libraries(
         utils
         rc
 )
+
+# CUDA
+if(DEFINED ENV{CUDA_HOME})
+    message("CUDA found at $ENV{CUDA_HOME}")
+    set(CMAKE_CUDA_COMPILER $ENV{CUDA_HOME}/bin/nvcc)
+    enable_language(CUDA)
+    include_directories( $ENV{CUDA_HOME}/include ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+else()
+    message( FATAL_ERROR "CUDA not found. CMake will exit." )
+endif()
+
+# include dir
+include_directories(include)
+
+file(GLOB utils_cpp utils/*.cpp)
+file(GLOB utils_cu utils/*.cu)
+file(GLOB tsdf_cpp TSDF/*cpp)
+file(GLOB tsdf_cu TSDF/*cu)
+
+add_library(
+        utils_gpu
+        ${utils_cpp}
+        ${tsdf_cpp}
+)
+
+add_executable(
+        ray_casting_gpu
+        main_gpu.cpp
+        ${utils_cu}
+        ${tsdf_cu}
+        RayCaster/GPURaycaster.cu
+        RayCaster/Raycaster.cpp
+)
+target_link_libraries(
+        ray_casting_gpu
+        utils_gpu
+        ${PNG_LIBRARY}
+)
+
+# necessary as the kernel exceeds maximum 64k
+target_compile_options(
+        ray_casting_gpu
+        PRIVATE
+        $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v --maxrregcount=64>
+)
+
+set_target_properties(
+        ray_casting_gpu
+        PROPERTIES
+        CUDA_SEPARABLE_COMPILATION ON
+)

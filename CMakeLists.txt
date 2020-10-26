@@ -4,6 +4,11 @@ project(ray_casting)
 set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
+# OpenCV
+set(OpenCV_DIR ~/Documents/opencv)
+find_package(OpenCV REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
+
 # PNG
 find_package(PNG REQUIRED)
 include_directories(${PNG_INCLUDE_DIRS})
@@ -81,6 +86,7 @@ target_link_libraries(
         ray_casting_gpu
         utils_gpu
         ${PNG_LIBRARY}
+        ${OpenCV_LIBS}
 )
 
 # necessary as the kernel exceeds maximum 64k

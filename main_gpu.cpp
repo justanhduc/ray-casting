@@ -12,7 +12,7 @@
 #include "TSDFVolume.hpp"
 #include "GPURaycaster.hpp"
 #include "RenderUtilities.hpp"
-//#include "opencv2/opencv.hpp"
+#include "opencv2/opencv.hpp"
 
 #define MAX_PATH 260  // for linux
 
@@ -26,8 +26,8 @@ int main() {
     const int height = 1024;
 
     GPURaycaster r{width, height};
-    Vector3f light_source{ 0, 3, 3 };
-    auto eye = Vector3f {0.5, 0,  2};  // view point
+    Vector3f light_source{0, 3, 3};
+    auto eye = Vector3f{0.5, 0, 2};  // view point
     auto *cam = new Camera((float) width / 2, (float) height / 2, (float) (width - 1) / 2,
                            (float) (height - 1) / 2);
     cam->move_to(eye);
@@ -56,21 +56,19 @@ int main() {
         volume.set_distance_data(tsdf);
 
         // define containers for normals and vertices
-        auto * vertices = new Eigen::Matrix<float, 3, Eigen::Dynamic>[ width * height ];
-        auto * normals = new Eigen::Matrix<float, 3, Eigen::Dynamic>[ width * height ];
+        auto *vertices = new Eigen::Matrix<float, 3, Eigen::Dynamic>[width * height];
+        auto *normals = new Eigen::Matrix<float, 3, Eigen::Dynamic>[width * height];
 
         // perform ray casting
         r.raycast(volume, *cam, *vertices, *normals);
 //        r.render_to_depth_image(volume, *cam);
-        save_rendered_scene_as_png("vvv.png", width, height, *vertices, *normals, *cam, light_source);
-//        cv::Mat frame;
+        uint8_t * scene = render_scene(width, height, *vertices, *normals, *cam, light_source);
 
-        // convert eigen to cv mat here
-
-//        imshow( "Frame", frame );
-//        auto c=(char)waitKey(25);
-//        if(c==27)
-//            break;
+        cv::Mat frame(height, width, 0, scene);
+        cv::imshow("Frame", frame);
+        auto c = (char) cv::waitKey(25);
+        if (c == 27)
+            break;
     }
 
     return 0;

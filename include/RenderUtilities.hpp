@@ -7,6 +7,11 @@
 
 class Camera;
 
+uint8_t * render_scene(uint16_t width, uint16_t height,
+                       const Eigen::Matrix<float, 3, Eigen::Dynamic>& vertices,
+                       const Eigen::Matrix<float, 3, Eigen::Dynamic>& normals,
+                       const Camera & camera, const Eigen::Vector3f & light_source);
+
 PngWrapper * normals_as_png(uint16_t width, uint16_t height, const Eigen::Matrix<float,3,Eigen::Dynamic>& normals);
 /*
  * Implement Lambertian colouring as per https://www.cs.unc.edu/~rademach/xroads-RT/RTarticle.html

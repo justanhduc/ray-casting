@@ -2,6 +2,38 @@
 
 #include <iostream>
 
+uint8_t * render_scene(uint16_t width, uint16_t height,
+                       const Eigen::Matrix<float, 3, Eigen::Dynamic>& vertices,
+                       const Eigen::Matrix<float, 3, Eigen::Dynamic>& normals,
+                       const Camera & camera, const Eigen::Vector3f & light_source) {
+    // allocate image data
+    uint64_t num_pixels = width * height;
+    auto *image = new uint8_t[num_pixels];
+
+    // Ensure that there's always ambient light
+    float ambient_coefficient = .2;
+    float diffuse_coefficient = 1. - ambient_coefficient;
+
+    // For each vertex/normal
+    for (uint64_t idx = 0; idx < num_pixels; idx++) {
+        // Vertex in camera space
+        Eigen::Vector3f vertex{vertices(0, idx), vertices(1, idx), vertices(2, idx)};
+
+        // Compute vector from vertex to light source
+        Eigen::Vector3f r = (light_source - vertex).normalized();
+        Eigen::Vector3f n{normals(0, idx), normals(1, idx), normals(2, idx)};
+
+        // Compute shade
+        float shade = std::fmax(0., n.dot(r));
+        shade = ambient_coefficient + (diffuse_coefficient * shade);
+
+        image[idx] = std::floor(shade * 255.99);
+    }
+
+    return image;
+}
+
+
 void save_normals_as_colour_png( std::string filename, uint16_t width, uint16_t height, const Eigen::Matrix<float, 3, Eigen::Dynamic>& normals ) {
 
     PngWrapper * p = normals_as_png( width, height, normals );

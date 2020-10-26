@@ -1,9 +1,12 @@
 #include <Eigen/Core>
 #include <cmath>
+#include <opencv2/opencv.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 #include "TSDFVolumeCPU.hpp"
 #include "Raycaster.hpp"
 #include "RenderUtilities.hpp"
+
 
 #define MAX_PATH 260  // for linux
 
@@ -56,15 +59,22 @@ int main() {
     uint16_t width = 1024;
     uint16_t height = 768;
 
-    Vector3f light_source{ 80, 80, -80 };
-    auto eye = Vector3f {0.5, 0.5,  2};
+    Eigen::Matrix<float, 3, Eigen::Dynamic> vertices;
+    Eigen::Matrix<float, 3, Eigen::Dynamic> normals;
+
+    Vector3f light_source{0, 3, 3};
+    auto eye = Vector3f{0.5, 0, 2};  // view point
     Camera *cam = new Camera((float) width / 2, (float) height / 2, (float) (width - 1) / 2, (float) (height - 1) / 2);
     cam->move_to(eye);
     cam->look_at(0.5, 0.5, 0.5);
 
     Raycaster r{width, height};
-    r.render_to_depth_image(volume, *cam);
+    r.raycast(volume, *cam, vertices, normals);
+    uint8_t * scene = render_scene(width, height, vertices, normals, *cam, light_source);
 
+    cv::Mat frame(height, width, 0, scene);
+    cv::imshow("Frame", frame);
+    cv::waitKey(0);
     return 0;
 }
 

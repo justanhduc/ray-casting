@@ -48,6 +48,7 @@ target_link_libraries(
         raycasting
         utils
         rc
+        ${OpenCV_LIBS}
 )
 
 # CUDA
@@ -68,12 +69,6 @@ file(GLOB utils_cu utils/*.cu)
 file(GLOB tsdf_cpp TSDF/*cpp)
 file(GLOB tsdf_cu TSDF/*cu)
 
-add_library(
-        utils_gpu
-        ${utils_cpp}
-        ${tsdf_cpp}
-)
-
 add_executable(
         ray_casting_gpu
         main_gpu.cpp
@@ -84,7 +79,7 @@ add_executable(
 )
 target_link_libraries(
         ray_casting_gpu
-        utils_gpu
+        utils
         ${PNG_LIBRARY}
         ${OpenCV_LIBS}
 )

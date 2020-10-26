@@ -486,3 +486,23 @@ float3cpu * Raycaster::compute_normals(const float3cpu * vertices) const {
 
     return normals;
 }
+
+
+void Raycaster::raycast(const TSDFVolumeCPU &volume, const Camera &camera,
+                        Eigen::Matrix<float, 3, Eigen::Dynamic> &vertices,
+                        Eigen::Matrix<float, 3, Eigen::Dynamic> &normals) const {
+    auto *verts = get_vertices(volume, camera);
+    auto *norms = compute_normals(verts);
+
+    vertices.resize( 3, m_width * m_height);
+    normals.resize( 3, m_width * m_height);
+    for (auto i = 0; i < m_height * m_width; ++i) {
+        vertices(0, i) = verts[i].x;
+        vertices(1, i) = verts[i].y;
+        vertices(2, i) = verts[i].z;
+
+        normals(0, i) = norms[i].x;
+        normals(1, i) = norms[i].y;
+        normals(2, i) = norms[i].z;
+    }
+}

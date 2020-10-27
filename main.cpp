@@ -1,3 +1,6 @@
+//  justanhduc
+// Oct 2020
+
 #include <Eigen/Core>
 #include <cmath>
 #include <opencv2/opencv.hpp>
@@ -10,25 +13,6 @@
 
 #define MAX_PATH 260  // for linux
 
-
-float* getSphere(float radius, int dim, float range) {
-    auto spacing = (float) range / (dim - 1);
-    auto *sphere = new float[dim * dim * dim];
-    auto x = 0, y = 0, z = 0;
-    for (auto i = -range/2; i <= range/2; i+=spacing, z++, x=0, y=0)
-        for (auto j = -range/2; j <= range/2; j+=spacing, y++, x=0)
-            for (auto k = -range/2; k <= range/2; k+=spacing, x++) {
-                auto v = pow(i, 2) + pow(j, 2) + pow(k, 2) - pow(radius, 2);
-                v = (v > 2.) ? 2. : v;
-                auto idx = z*dim*dim + y * dim + x;
-                sphere[idx] = v;
-            }
-    return sphere;
-}
-
-inline float radians(float deg) {
-    return deg / 180. * M_PI;
-}
 
 int main() {
     using namespace Eigen;
@@ -64,14 +48,14 @@ int main() {
 
     Vector3f light_source{0, 3, 3};
     auto eye = Vector3f{0.5, 0, 2};  // view point
-    Camera *cam = new Camera((float) width / 2, (float) height / 2, (float) (width - 1) / 2,
-                             (float) (height - 1) / 2);
-    cam->move_to(eye);
-    cam->look_at(0.5, 0.5, 0.5);
+    Camera cam((float) width / 2, (float) height / 2, (float) (width - 1) / 2,
+               (float) (height - 1) / 2);
+    cam.move_to(eye);
+    cam.look_at(0.5, 0.5, 0.5);
 
     Raycaster r{width, height};
-    r.raycast(volume, *cam, vertices, normals);
-    uint8_t * scene = render_scene(width, height, vertices, normals, *cam, light_source);
+    r.raycast(volume, cam, vertices, normals);
+    uint8_t *scene = render_scene(width, height, vertices, normals, cam, light_source);
 
     cv::Mat frame(height, width, 0, scene);
     cv::imshow("Frame", frame);

@@ -26,7 +26,7 @@ void compute_shading(const float3 *vertices, const float3 *normals, const float3
 
 
 void render_scene(uint16_t width, uint16_t height, float3 *vertices, float3 *normals,
-                  const Eigen::Vector3f & light_source, uint8_t *image) {
+                  const Eigen::Vector3f &light_source, uint8_t *image) {
     using namespace Eigen;
 
     auto ls = float3_from_eigen_vector(light_source);
@@ -40,14 +40,14 @@ void render_scene(uint16_t width, uint16_t height, float3 *vertices, float3 *nor
     cudaError_t err;
     uint8_t *d_image = nullptr;
     err = cudaMalloc((void **) &d_image, data_size * sizeof(uint8_t));
-    check_cuda_error( "image alloc failed ", err);
+    check_cuda_error("image alloc failed ", err);
 
     int block_dim = 32;
     dim3 grid_dim = dim3(divUp(width, block_dim), divUp(height, block_dim));
-    compute_shading <<< grid_dim, dim3(block_dim, block_dim) >>> (
+    compute_shading <<< grid_dim, dim3(block_dim, block_dim) >>>(
             vertices, normals, ls, width, height, ambient_coefficient, d_image);
-    err = cudaDeviceSynchronize( );
-    check_cuda_error( "failed to compute shading " , err);
+    err = cudaDeviceSynchronize();
+    check_cuda_error("failed to compute shading ", err);
     cudaMemcpy(image, d_image, data_size, cudaMemcpyDeviceToHost);
     cudaFree(d_image);
 }

@@ -1,17 +1,12 @@
-//
-//  main.cpp
-//  VoxelSpaceViewer
-//
-//  Created by Dave on 26/05/2016.
-//  Copyright © 2016 Sindesso. All rights reserved.
-//
+//  justanhduc
+// Oct 2020
 
 #include <Eigen/Core>
 #include <cmath>
+#include <ctime>
 
 #include "TSDFVolume.hpp"
 #include "GPURaycaster.hpp"
-#include "RenderUtilitiesGPU.hpp"
 #include "opencv2/opencv.hpp"
 
 #define MAX_PATH 260  // for linux
@@ -28,16 +23,17 @@ int main() {
     GPURaycaster r{width, height};
     Vector3f light_source{0, 3, 3};
     auto eye = Vector3f{0.5, 0, 2};  // view point
-    auto *cam = new Camera((float) width / 2, (float) height / 2, (float) (width - 1) / 2,
-                           (float) (height - 1) / 2);
-    cam->move_to(eye);
-    cam->look_at(0.5, 0.5, 0.5);
+    Camera cam((float) width / 2, (float) height / 2, (float) (width - 1) / 2,
+             (float) (height - 1) / 2);
+    cam.move_to(eye);
+    cam.look_at(0.5, 0.5, 0.5);
 
     TSDFVolume volume(dim_x, dim_y, dim_z, dim_x * .01, dim_y * .01, dim_z * .01);
     volume.set_truncation_distance(.1);  // set low threshold as the step size may be large
 
     char stmp[MAX_PATH];
     float ftemp[8];
+    auto total_time = 0.;
     for (int i = 0; i < n_max_frame; i++) {
         // reading tsdf files
         auto *tsdf = new float[dim_x * dim_y * dim_z * n_max_frame];
@@ -52,6 +48,8 @@ int main() {
         fread(tsdf, dim_x * dim_y * dim_z, sizeof(float), fp);
         fclose(fp);
 
+        // start
+        auto start = std::time(nullptr);
         // set tsdf to volume
         volume.set_distance_data(tsdf);
 
@@ -59,25 +57,22 @@ int main() {
         Eigen::Matrix<float, 3, Eigen::Dynamic> vertices;
         Eigen::Matrix<float, 3, Eigen::Dynamic> normals;
 
-        // perform ray casting
-//        r.raycast(volume, *cam, *vertices, *normals);
-//        r.render_to_depth_image(volume, *cam);
+        // raycast + shading + rendering
         auto *scene = new uint8_t[height * width];
-        r.render_with_shading(volume, *cam, vertices, normals, light_source, scene);
+        r.render_with_shading(volume, cam, vertices, normals, light_source, scene);
 
-//        r.raycast(volume, *cam, vertices, normals);
-//        save_rendered_scene_as_png("vvv.png", width, height, vertices, normals, *cam, light_source);
-//        for (auto i = 0; i < width * height; i++)
-//            std::cout << normals[i] << std::endl;
+        // done
+        total_time += std::difftime(std::time(nullptr), start);
 
+        // display
         cv::Mat frame(height, width, 0, scene);
         cv::imshow("Frame", frame);
-//        cv::waitKey(0);
-        auto c = (char) cv::waitKey(25);
+        auto c = (char) cv::waitKey(1);
         if (c == 27)
             break;
     }
 
+    std::cout << "FPS: " << 1 / (total_time / n_max_frame) << std::endl;
     return 0;
 }
 

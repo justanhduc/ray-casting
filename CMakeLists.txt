@@ -85,7 +85,7 @@ if (DEFINED ENV{CUDA_HOME})
     target_compile_options(
             ray_casting_gpu
             PRIVATE
-            $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v --maxrregcount=64>
+            $<$<COMPILE_LANGUAGE:CUDA>:--maxrregcount=64 -use_fast_math>
     )
 
     set_target_properties(

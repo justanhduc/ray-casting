@@ -22,7 +22,7 @@
  * @return The unit direction vector for the ray in world coordinate space
  */
 __device__
-float3 compute_ray_direction_at_pixel(const float3 &origin, float pix_x, float pix_y, const Mat33 &rot,
+float3 compute_ray_direction_at_pixel(const float3 &origin, uint16_t pix_x, uint16_t pix_y, const Mat33 &rot,
                                       const Mat33 &kinv) {
 
     // Get point at depth 1mm. This is the direction vector in cam coords
@@ -280,9 +280,6 @@ void process_ray(const float3 origin,
                  const dim3 voxel_grid_size,
                  const float3 voxel_size,
                  const float *tsdf_values,
-                 const int num_samples,
-                 const float *offset_x,
-                 const float *offset_y,
                  float3 *vertices) {
 
     int imx = threadIdx.x + blockIdx.x * blockDim.x;
@@ -311,85 +308,78 @@ void process_ray(const float3 origin,
     float3 intersection_point{CUDART_NAN_F, CUDART_NAN_F, CUDART_NAN_F};
 
     if (intersects) {
-        for (auto n = 0; n < num_samples; ++n) {
-            if (n > 0)
-                direction = compute_ray_direction_at_pixel(origin, imx + offset_x[n-1], imy + offset_y[n-1],
-                                                           rot, kinv);
+        // Compute the start point in grid coords
+        float3 start_point = f3_sub(f3_add(origin, f3_mul_scalar(near_t, direction)), space_min);
 
-            float3 start_point = f3_sub(f3_add(origin, f3_mul_scalar(near_t, direction)), space_min);
-            bool done = false;
+        bool done = false;
 
-            // Initialise TSDF to trun distance
-            auto tsdf = trunc_distance;
-            float previous_tsdf;
+        // Initialise TSDF to trun distance
+        float tsdf = trunc_distance;
+        float previous_tsdf = 0;
 
-            // Set up current point to iterate
-            float t = 0;
-            auto max_t = far_t - near_t;
 
-            // Iterate until
-            //   We leave the voxel space (fail)
-            //   We transit from +ve to -ve tsdf (intersect)
-            //   We transit from -ve to +ve (fail)
-            int count = 0;
-            float step_size = trunc_distance * 0.05;
-            while (!done) {
-                float3 current_point = f3_add(start_point, f3_mul_scalar(t, direction));
+        // Set up current point to iterate
+        float t = 0;
+        float max_t = far_t - near_t;
 
-                // Save last TSDF (to check against crossing surface)
-                previous_tsdf = tsdf;
+        // Iterate until
+        //   We leave the voxel space (fail)
+        //   We transit from +ve to -ve tsdf (intersect)
+        //   We transit from -ve to +ve (fail)
+        int count = 0;
+        float step_size = trunc_distance * 0.05;
+        while (!done) {
+            float3 current_point = f3_add(start_point, f3_mul_scalar(t, direction));
 
-                // Extract the tsdf
-                float tsdf = trilinearly_interpolate(current_point, voxel_grid_size, voxel_size, tsdf_values);
-                // If tsdf is negative then we're behind the surface else we're on it
-                if (tsdf <= 0) {
-                    // If we stepped past the iso surface, work out when
-                    if (tsdf < 0) {
-                        // We just advanced by step_size so step back
-                        t = t - step_size;
+            // Save last TSDF (to check against crossing surface)
+            previous_tsdf = tsdf;
 
-                        // Linearly interpolate the crossing point
-                        t = t + (previous_tsdf / (previous_tsdf - tsdf)) * step_size;
-                    }
+            // Extract the tsdf
+            float tsdf = trilinearly_interpolate(current_point, voxel_grid_size, voxel_size, tsdf_values);
+            // If tsdf is negative then we're behind the surface else we're on it
+            if (tsdf <= 0) {
+                // If we stepped past the iso surface, work out when
+                if (tsdf < 0) {
+                    // We just advanced by step_size so step back
+                    t = t - step_size;
 
-                    // Compute the point of intersection
-                    current_point = f3_add(start_point, f3_mul_scalar(t, direction));
-
-                    // Put into world coordinates
-                    if (n == 0)
-                        intersection_point = f3_add(space_min, current_point);
-                    else
-                        intersection_point = f3_add(intersection_point, f3_add(space_min, current_point));
-
-                    done = true;
+                    // Linearly interpolate the crossing point
+                    t = t + (previous_tsdf / (previous_tsdf - tsdf)) * step_size;
                 }
 
-                    // tsdf is +ve, if previous tsdf was negative then we hit a backface and we're done
-                else if (previous_tsdf < 0) {
-                    done = true;
-                }
+                // Compute the point of intersection
+                current_point = f3_add(start_point, f3_mul_scalar(t, direction));
 
-                    // previous tsdf was +ve and so is this one. We've not crossed the surface
-                    // so keep stepping
-                else {
-                    t = t + step_size;
+                // Put into world coordinates
+                intersection_point = f3_add(space_min, current_point);
+                done = true;
+            }
 
-                    // Until we step out of the volume
-                    if (t >= max_t) {
-                        done = true;
-                    }
-                }
+                // tsdf is +ve, if previous tsdf was negative then we hit a backface and we're done
+            else if (previous_tsdf < 0) {
+                done = true;
+            }
 
-                // Catch failures - this code shouldn';'t be invoked.
-                if (count++ > 4400) {
-                    printf("Timed out @(%d,%d) with t:%f tsdf:%f\n", imx, imy, t, tsdf);
+                // previous tsdf was +ve and so is this one. We've not crossed the surface
+                // so keep stepping
+            else {
+                t = t + step_size;
 
+                // Until we step out of the volume
+                if (t >= max_t) {
                     done = true;
                 }
             }
+
+            // Catch failures - this code shouldn';'t be invoked.
+            if (count++ > 4400) {
+                printf("Timed out @(%d,%d) with t:%f tsdf:%f\n", imx, imy, t, tsdf);
+
+                done = true;
+            }
         }
     }
-    vertices[idx] = f3_mul_scalar(1. / num_samples, intersection_point);
+    vertices[idx] = intersection_point;
 }
 
 
@@ -445,8 +435,7 @@ __host__
 float3 *get_vertices(const TSDFVolume &volume,
                      const Camera &camera,
                      uint16_t width,
-                     uint16_t height,
-                     int n_samples=1) {
+                     uint16_t height) {
 
 
     // Setup camera origin
@@ -488,26 +477,11 @@ float3 *get_vertices(const TSDFVolume &volume,
     err = cudaMalloc(&d_vertices, data_size);
     check_cuda_error("Vertices alloc failed ", err);
 
-    // anti-aliasing samples
-    auto n_samples_ = n_samples - 1;
-    auto offset_x = new float[n_samples_]();
-    auto offset_y = new float[n_samples_]();
-    for (auto i = 0; i < n_samples_; ++i) {
-        offset_x[i] = std::sqrt(n_samples) * (((float) rand() / RAND_MAX) - .5);
-        offset_y[i] = std::sqrt(n_samples) * (((float) rand() / RAND_MAX) - .5);
-    }
-    float *d_offset_x, *d_offset_y;
-    cudaMalloc(&d_offset_x, n_samples_ * sizeof(float));
-    cudaMalloc(&d_offset_y, n_samples_ * sizeof(float));
-    cudaMemcpy(d_offset_x, offset_x, n_samples_ * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_offset_y, offset_y, n_samples_ * sizeof(float), cudaMemcpyHostToDevice);
-
     // Execute the kernel
     dim3 block(32, 32);
     dim3 grid(divUp(width, block.x), divUp(height, block.y));
     process_ray <<< grid, block>>>(origin, rot, kinv, width, height, volume.truncation_distance(),
-                                   space_min, space_max, voxel_grid_size, voxel_size, d_tsdf_values,
-                                   n_samples, d_offset_x, d_offset_y, d_vertices);
+                                   space_min, space_max, voxel_grid_size, voxel_size, d_tsdf_values, d_vertices);
     err = cudaDeviceSynchronize();
     check_cuda_error("process_ray failed ", err);
 
@@ -638,11 +612,11 @@ DepthImage *GPURaycaster::render_to_depth_image(const TSDFVolume &volume, const 
 void GPURaycaster::render_with_shading(const TSDFVolume &volume, const Camera &camera,
                                        Eigen::Matrix<float, 3, Eigen::Dynamic> &vertices,
                                        Eigen::Matrix<float, 3, Eigen::Dynamic> &normals,
-                                       const Eigen::Vector3f &light_source, int n_samples, uint8_t *image) const {
+                                       const Eigen::Vector3f &light_source, uint8_t *image) const {
     using namespace Eigen;
 
     // Compute vertices
-    float3 *d_vertices = get_vertices(volume, camera, m_width, m_height, n_samples);
+    float3 *d_vertices = get_vertices(volume, camera, m_width, m_height);
 
     // Compute normals
     float3 *d_normals = compute_normals(m_width, m_height, d_vertices);

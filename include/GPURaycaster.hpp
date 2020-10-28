@@ -44,7 +44,7 @@ public:
     void render_with_shading(const TSDFVolume & volume, const Camera & camera,
                              Eigen::Matrix<float, 3, Eigen::Dynamic> & vertices,
                              Eigen::Matrix<float, 3, Eigen::Dynamic> & normals,
-                             const Eigen::Vector3f &light_source, int n_samples, uint8_t *image) const;
+                             const Eigen::Vector3f &light_source, uint8_t *image) const;
 
 protected:
 

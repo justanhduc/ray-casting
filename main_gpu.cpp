@@ -19,6 +19,7 @@ int main() {
     const int n_max_frame = 30;
     const int width = 1024;
     const int height = 1024;
+    const int n_samples = 3;  // for anti-aliasing. 1 == no anti-aliasing
 
     GPURaycaster r{width, height};
     Vector3f light_source{0, 3, 3};
@@ -59,7 +60,7 @@ int main() {
 
         // raycast + shading + rendering
         auto *scene = new uint8_t[height * width];
-        r.render_with_shading(volume, cam, vertices, normals, light_source, scene);
+        r.render_with_shading(volume, cam, vertices, normals, light_source, n_samples, scene);
 
         // done
         total_time += std::difftime(std::time(nullptr), start);

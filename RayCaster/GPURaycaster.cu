@@ -1,6 +1,3 @@
-#include <iostream>
-#include <cstdio>
-
 #include "TSDFVolume.hpp"
 #include "GPURaycaster.hpp"
 #include "cuda_utilities.cuh"
@@ -8,8 +5,11 @@
 #include "PngUtilities.hpp"
 #include "RenderUtilitiesGPU.hpp"
 
+#include <iostream>
+#include <cstdio>
 #include <Eigen/Core>
-#include "math_constants.h"
+#include <math_constants.h>
+#include <curand_kernel.h>
 
 /**
  * Compute a direction vector, in world coordinates, from cam centre
@@ -22,7 +22,7 @@
  * @return The unit direction vector for the ray in world coordinate space
  */
 __device__
-float3 compute_ray_direction_at_pixel(const float3 &origin, uint16_t pix_x, uint16_t pix_y, const Mat33 &rot,
+float3 compute_ray_direction_at_pixel(const float3 &origin, float pix_x, float pix_y, const Mat33 &rot,
                                       const Mat33 &kinv) {
 
     // Get point at depth 1mm. This is the direction vector in cam coords
@@ -272,8 +272,8 @@ __global__
 void process_ray(const float3 origin,
                  const Mat33 rot,
                  const Mat33 kinv,
-                 uint16_t max_x,
-                 uint16_t max_y,
+                 uint16_t width,
+                 uint16_t height,
                  const float trunc_distance,
                  const float3 space_min,
                  const float3 space_max,
@@ -286,15 +286,25 @@ void process_ray(const float3 origin,
     int imy = threadIdx.y + blockIdx.y * blockDim.y;
 
     // Terminate early if the index is out of bounds
-    if (imx >= max_x || imy >= max_y) {
+    if (imx >= width || imy >= height) {
         return;
     }
 
-    size_t idx = imy * max_x + imx;
+    size_t idx = imy * width + imx;
+
+    // setup offsets
+    auto offset_x = 0.;
+    auto offset_y = 0.;
+    if (gridDim.z > 1 && blockIdx.z > 0) {
+        auto pi = 3.14159265359;
+        auto angle = pi / (gridDim.z - 1) * (blockIdx.z - 1);
+        offset_x = cos(angle) * log((float) gridDim.z - 1);
+        offset_y = sin(angle) * log((float) gridDim.z - 1);
+    }
 
     // Compute the ray direction for this pixel in world coordinates
     // which is R K-1 (x,y,1)T
-    float3 direction = compute_ray_direction_at_pixel(origin, imx, imy, rot, kinv);
+    float3 direction = compute_ray_direction_at_pixel(origin, imx + offset_x, imy + offset_y, rot, kinv);
 
     // Compute near and far intersections of the TSDF volume by this ray
     // near and far T are valules of the parameter origin + t*(direction.unit) at which the
@@ -315,7 +325,7 @@ void process_ray(const float3 origin,
 
         // Initialise TSDF to trun distance
         float tsdf = trunc_distance;
-        float previous_tsdf = 0;
+        float previous_tsdf;
 
 
         // Set up current point to iterate
@@ -379,7 +389,11 @@ void process_ray(const float3 origin,
             }
         }
     }
-    vertices[idx] = intersection_point;
+
+    intersection_point = f3_mul_scalar(1. / gridDim.z, intersection_point);
+    atomicAdd(&vertices[idx].x, intersection_point.x);
+    atomicAdd(&vertices[idx].y, intersection_point.y);
+    atomicAdd(&vertices[idx].z, intersection_point.z);
 }
 
 
@@ -435,7 +449,8 @@ __host__
 float3 *get_vertices(const TSDFVolume &volume,
                      const Camera &camera,
                      uint16_t width,
-                     uint16_t height) {
+                     uint16_t height,
+                     const int n_samples=1) {
 
 
     // Setup camera origin
@@ -465,21 +480,22 @@ float3 *get_vertices(const TSDFVolume &volume,
     float3 space_min = volume.offset();
     float3 space_max = volume.offset() + volume.physical_size();
 
-
-    cudaError_t err;
-
     // Get reference to TSDF distance data
     const float *d_tsdf_values = volume.distance_data();
 
     // Allocate storage for vertices on device
+    cudaError_t err;
     size_t data_size = width * height * sizeof(float3);
     float3 *d_vertices;
     err = cudaMalloc(&d_vertices, data_size);
     check_cuda_error("Vertices alloc failed ", err);
+    err = cudaMemset(d_vertices, 0, data_size);
+    check_cuda_error("Cant set default values for vertices ", err);
 
     // Execute the kernel
     dim3 block(32, 32);
-    dim3 grid(divUp(width, block.x), divUp(height, block.y));
+    dim3 grid(divUp(width, block.x), divUp(height, block.y), n_samples);
+
     process_ray <<< grid, block>>>(origin, rot, kinv, width, height, volume.truncation_distance(),
                                    space_min, space_max, voxel_grid_size, voxel_size, d_tsdf_values, d_vertices);
     err = cudaDeviceSynchronize();
@@ -612,11 +628,11 @@ DepthImage *GPURaycaster::render_to_depth_image(const TSDFVolume &volume, const 
 void GPURaycaster::render_with_shading(const TSDFVolume &volume, const Camera &camera,
                                        Eigen::Matrix<float, 3, Eigen::Dynamic> &vertices,
                                        Eigen::Matrix<float, 3, Eigen::Dynamic> &normals,
-                                       const Eigen::Vector3f &light_source, uint8_t *image) const {
+                                       const Eigen::Vector3f &light_source, int n_samples, uint8_t *image) const {
     using namespace Eigen;
 
     // Compute vertices
-    float3 *d_vertices = get_vertices(volume, camera, m_width, m_height);
+    float3 *d_vertices = get_vertices(volume, camera, m_width, m_height, n_samples);
 
     // Compute normals
     float3 *d_normals = compute_normals(m_width, m_height, d_vertices);

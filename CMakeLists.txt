@@ -17,7 +17,7 @@ link_directories(${PNG_LIBRARY_DIRS})
 add_definitions(${PNG_DEFINITIONS})
 
 # Eigen
-include_directories(/home/justanhduc/Documents/eigen)
+include_directories($ENV{EIGEN})
 
 # include dir
 include_directories(include)
